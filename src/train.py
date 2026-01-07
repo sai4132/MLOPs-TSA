@@ -71,10 +71,10 @@ def log_experiment(model, rmse, metadata):
 
 @flow(name="tsa-training-pipeline")
 def run_pipeline():
-    df = load_data("data/raw/air_passengers.csv")
+    df = load_data(r"D:\MLOPS\data\raw\AirPassengers.csv")
 
     git_commit = get_git_commit()
-    data_hash = get_dvc_data_hash("data/raw/air_passengers.csv.dvc")
+    data_hash = get_dvc_data_hash(r"D:\MLOPS\data\raw\AirPassengers.csv.dvc")
 
     for window in [12, 24, 36]:
         with mlflow.start_run():
