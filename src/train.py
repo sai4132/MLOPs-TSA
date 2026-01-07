@@ -7,7 +7,16 @@ from sklearn.metrics import mean_squared_error
 import subprocess
 import yaml
 
-# ---------- helpers ----------
+# -----------------------
+# Pipeline steps
+# -----------------------
+
+def load_data(path):
+    df = pd.read_csv(path)
+    df["Month"] = pd.to_datetime(df["Month"])
+    df["t"] = np.arange(len(df))
+    return df
+
 def get_git_commit():
     try:
         return subprocess.check_output(
@@ -24,39 +33,50 @@ def get_dvc_data_hash(dvc_file_path):
     except Exception:
         return "unknown"
 
-# ---------- data ----------
-df = pd.read_csv(r"D:\MLOPS\data\raw\AirPassengers.csv")
-df["Month"] = pd.to_datetime(df["Month"])
-df["t"] = np.arange(len(df))
+def train_and_evaluate(df, forecast_window):
+    train = df.iloc[:-forecast_window]
+    test = df.iloc[-forecast_window:]
 
-window_sizes = [12, 24, 36]
+    X_train = train[["t"]]
+    y_train = train["Passengers"]
+    X_test = test[["t"]]
+    y_test = test["Passengers"]
 
-git_commit = get_git_commit()
-data_hash = get_dvc_data_hash(r"D:\MLOPS\data\raw\AirPassengers.csv.dvc")
+    model = LinearRegression()
+    model.fit(X_train, y_train)
 
-for window in window_sizes:
-    with mlflow.start_run():
-        train = df.iloc[:-window]
-        test = df.iloc[-window:]
+    preds = model.predict(X_test)
+    rmse = np.sqrt(mean_squared_error(y_test, preds))
 
-        X_train = train[["t"]]
-        y_train = train["Passengers"]
-        X_test = test[["t"]]
-        y_test = test["Passengers"]
+    return model, rmse
 
-        model = LinearRegression()
-        model.fit(X_train, y_train)
+def log_experiment(model, rmse, metadata):
+    mlflow.log_param("model_type", "LinearRegression")
+    mlflow.log_param("forecast_window", metadata["forecast_window"])
+    mlflow.log_param("git_commit", metadata["git_commit"])
+    mlflow.log_param("dvc_data_hash", metadata["dvc_data_hash"])
 
-        preds = model.predict(X_test)
-        rmse = np.sqrt(mean_squared_error(y_test, preds))
+    mlflow.log_metric("rmse", rmse)
+    mlflow.sklearn.log_model(model, artifact_path="model")
 
-        # ---- log metadata ----
-        mlflow.log_param("model_type", "LinearRegression")
-        mlflow.log_param("forecast_window", window)
-        mlflow.log_param("git_commit", git_commit)
-        mlflow.log_param("dvc_data_hash", data_hash)
+# -----------------------
+# Pipeline orchestration
+# -----------------------
 
-        mlflow.log_metric("rmse", rmse)
-        mlflow.sklearn.log_model(model, artifact_path="model")
+def run_pipeline():
+    df = load_data(r"D:\MLOPS\data\raw\AirPassengers.csv")
 
-        print(f"Window={window} | RMSE={rmse}")
+    metadata = {
+        "git_commit": get_git_commit(),
+        "dvc_data_hash": get_dvc_data_hash(r"data/raw/AirPassengers.csv.dvc")
+    }
+
+    for window in [12, 24, 36]:
+        with mlflow.start_run():
+            metadata["forecast_window"] = window
+            model, rmse = train_and_evaluate(df, window)
+            log_experiment(model, rmse, metadata)
+            print(f"Window={window} | RMSE={rmse}")
+
+if __name__ == "__main__":
+    run_pipeline()
