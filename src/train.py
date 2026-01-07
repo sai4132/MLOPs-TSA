@@ -6,17 +6,20 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
 import subprocess
 import yaml
+from prefect import flow, task
 
 # -----------------------
 # Pipeline steps
 # -----------------------
 
+@task
 def load_data(path):
     df = pd.read_csv(path)
     df["Month"] = pd.to_datetime(df["Month"])
     df["t"] = np.arange(len(df))
     return df
 
+@task
 def get_git_commit():
     try:
         return subprocess.check_output(
@@ -25,6 +28,7 @@ def get_git_commit():
     except Exception:
         return "unknown"
 
+@task
 def get_dvc_data_hash(dvc_file_path):
     try:
         with open(dvc_file_path, "r") as f:
@@ -33,6 +37,7 @@ def get_dvc_data_hash(dvc_file_path):
     except Exception:
         return "unknown"
 
+@task(retries=2, retry_delay_seconds=5)
 def train_and_evaluate(df, forecast_window):
     train = df.iloc[:-forecast_window]
     test = df.iloc[-forecast_window:]
@@ -50,6 +55,7 @@ def train_and_evaluate(df, forecast_window):
 
     return model, rmse
 
+@task
 def log_experiment(model, rmse, metadata):
     mlflow.log_param("model_type", "LinearRegression")
     mlflow.log_param("forecast_window", metadata["forecast_window"])
@@ -63,17 +69,20 @@ def log_experiment(model, rmse, metadata):
 # Pipeline orchestration
 # -----------------------
 
+@flow(name="tsa-training-pipeline")
 def run_pipeline():
-    df = load_data(r"D:\MLOPS\data\raw\AirPassengers.csv")
+    df = load_data("data/raw/air_passengers.csv")
 
-    metadata = {
-        "git_commit": get_git_commit(),
-        "dvc_data_hash": get_dvc_data_hash(r"data/raw/AirPassengers.csv.dvc")
-    }
+    git_commit = get_git_commit()
+    data_hash = get_dvc_data_hash("data/raw/air_passengers.csv.dvc")
 
     for window in [12, 24, 36]:
         with mlflow.start_run():
-            metadata["forecast_window"] = window
+            metadata = {
+                "forecast_window": window,
+                "git_commit": git_commit,
+                "dvc_data_hash": data_hash
+            }
             model, rmse = train_and_evaluate(df, window)
             log_experiment(model, rmse, metadata)
             print(f"Window={window} | RMSE={rmse}")
