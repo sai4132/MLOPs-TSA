@@ -117,7 +117,7 @@ def run_pipeline():
                     registry["production"] = {
                         "run_id": mlflow.active_run().info.run_id,
                         "model_path": "model",
-                        "rmse": rmse,
+                        "rmse": float(rmse),  # <-- FIX
                         "git_commit": git_commit,
                         "dvc_data_hash": data_hash,
                     }
