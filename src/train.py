@@ -7,6 +7,18 @@ from sklearn.metrics import mean_squared_error
 import subprocess
 import yaml
 from prefect import flow, task
+import os
+
+def load_registry(path="model_registry.yaml"):
+    if not os.path.exists(path):
+        return {"production": {}}
+    with open(path, "r") as f:
+        return yaml.safe_load(f)
+
+def save_registry(registry, path="model_registry.yaml"):
+    with open(path, "w") as f:
+        yaml.safe_dump(registry, f)
+
 
 # -----------------------
 # Pipeline steps
@@ -94,11 +106,31 @@ def run_pipeline():
             passed = quality_check(rmse)
 
             if passed:
-                mlflow.log_param("model_status", "accepted")
-                print("Model accepted")
+                registry = load_registry()
+                prod_rmse = registry["production"].get("rmse")
+
+                promote = (
+                    prod_rmse is None or rmse < prod_rmse
+                )
+
+                if promote:
+                    registry["production"] = {
+                        "run_id": mlflow.active_run().info.run_id,
+                        "model_path": "model",
+                        "rmse": rmse,
+                        "git_commit": git_commit,
+                        "dvc_data_hash": data_hash,
+                    }
+                    save_registry(registry)
+                    mlflow.log_param("model_status", "promoted")
+                    print("Model promoted to production")
+                else:
+                    mlflow.log_param("model_status", "accepted_not_promoted")
+                    print("Model accepted but not promoted")
             else:
                 mlflow.log_param("model_status", "rejected")
                 print("Model rejected")
+
             print(f"Window={window} | RMSE={rmse}")
 
 if __name__ == "__main__":

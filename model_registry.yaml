@@ -1,0 +1,6 @@
+production:
+  run_id: null
+  model_path: null
+  rmse: null
+  git_commit: null
+  dvc_data_hash: null
