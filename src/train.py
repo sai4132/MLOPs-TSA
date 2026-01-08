@@ -11,6 +11,11 @@ from prefect import flow, task
 # -----------------------
 # Pipeline steps
 # -----------------------
+@task
+def quality_check(rmse, threshold=100.0):
+    passed = rmse < threshold
+    print(f"Quality check | RMSE={rmse:.2f} | Passed={passed}")
+    return passed
 
 @task
 def load_data(path):
@@ -85,6 +90,15 @@ def run_pipeline():
             }
             model, rmse = train_and_evaluate(df, window)
             log_experiment(model, rmse, metadata)
+
+            passed = quality_check(rmse)
+
+            if passed:
+                mlflow.log_param("model_status", "accepted")
+                print("Model accepted")
+            else:
+                mlflow.log_param("model_status", "rejected")
+                print("Model rejected")
             print(f"Window={window} | RMSE={rmse}")
 
 if __name__ == "__main__":
