@@ -5,49 +5,79 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 # -----------------------
-# Load registry
+# App
+# -----------------------
+
+app = FastAPI(title="TSA Forecasting Service")
+
+model = None
+model_metadata = None
+
+
+# -----------------------
+# Registry + model loading
 # -----------------------
 
 def load_registry(path="model_registry.yaml"):
     with open(path, "r") as f:
         return yaml.safe_load(f)
 
-registry = load_registry()
-prod = registry.get("production")
 
-if not prod or not prod.get("run_id"):
-    raise RuntimeError("No production model found in registry")
+def load_production_model():
+    global model, model_metadata
+
+    registry = load_registry()
+    prod = registry.get("production")
+
+    if not prod or not prod.get("run_id"):
+        raise RuntimeError("No production model found in registry")
+
+    model_uri = f"runs:/{prod['run_id']}/{prod['model_path']}"
+    model = mlflow.pyfunc.load_model(model_uri)
+    model_metadata = prod
+
 
 # -----------------------
-# Load model from MLflow
+# Startup hook
 # -----------------------
 
-model_uri = f"runs:/{prod['run_id']}/{prod['model_path']}"
-model = mlflow.pyfunc.load_model(model_uri)
+@app.on_event("startup")
+def startup_event():
+    load_production_model()
+    print("Production model loaded")
+
 
 # -----------------------
-# FastAPI app
+# API schemas
 # -----------------------
-
-app = FastAPI(title="TSA Forecasting Service")
 
 class ForecastRequest(BaseModel):
-    t: int  # time index
+    t: int
+
 
 class ForecastResponse(BaseModel):
     prediction: float
+
+
+# -----------------------
+# Endpoints
+# -----------------------
 
 @app.get("/")
 def health():
     return {
         "status": "ok",
-        "rmse": prod["rmse"],
-        "git_commit": prod["git_commit"],
-        "dvc_data_hash": prod["dvc_data_hash"],
+        "rmse": model_metadata["rmse"],
+        "git_commit": model_metadata["git_commit"],
+        "dvc_data_hash": model_metadata["dvc_data_hash"],
     }
+
 
 @app.post("/predict", response_model=ForecastResponse)
 def predict(req: ForecastRequest):
+    if model is None:
+        raise HTTPException(status_code=500, detail="Model not loaded")
+
     try:
         df = pd.DataFrame({"t": [req.t]})
         pred = model.predict(df)[0]
