@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import os
 from datetime import datetime
-
+from config import MODEL_REGISTRY_PATH, LOG_DIR
 
 # -----------------------
 # App
@@ -21,7 +21,7 @@ model_metadata = None
 # Registry + model loading
 # -----------------------
 
-def load_registry(path="model_registry.yaml"):
+def load_registry(path=MODEL_REGISTRY_PATH):
     with open(path, "r") as f:
         return yaml.safe_load(f)
 
@@ -40,8 +40,8 @@ def load_production_model():
     model_metadata = prod
 
 def log_inference(input_t, prediction, metadata):
-    log_path = "logs/inference_log.csv"
-    os.makedirs("logs", exist_ok=True)
+    os.makedirs(LOG_DIR, exist_ok=True)
+    log_path = f"{LOG_DIR}/inference_log.csv"
 
     row = {
         "timestamp": datetime.utcnow().isoformat(),

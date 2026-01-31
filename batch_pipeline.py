@@ -4,14 +4,14 @@ import pandas as pd
 from prefect import flow, task
 import os
 from datetime import datetime
-
+from config import MODEL_REGISTRY_PATH, LOG_DIR
 
 # -----------------------
 # Tasks
 # -----------------------
 
 @task
-def load_registry(path="model_registry.yaml"):
+def load_registry(path=MODEL_REGISTRY_PATH):
     with open(path, "r") as f:
         registry = yaml.safe_load(f)
 
@@ -64,8 +64,8 @@ def log_batch_inference(
     output_csv,
     num_rows,
 ):
-    os.makedirs("logs", exist_ok=True)
-    log_path = "logs/batch_inference_log.csv"
+    os.makedirs(LOG_DIR, exist_ok=True)
+    log_path = f"{LOG_DIR}/batch_inference_log.csv"
 
     row = {
         "timestamp": datetime.utcnow().isoformat(),
