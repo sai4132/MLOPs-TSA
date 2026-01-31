@@ -1,6 +1,6 @@
 production:
-  run_id: null
-  model_path: null
-  rmse: null
-  git_commit: null
-  dvc_data_hash: null
+  dvc_data_hash: 9d9ab61bed36f7af869b9b0278eed2e6
+  git_commit: 6898751fc4c5d9622d5c2c0f30513eabe7b161e6
+  model_path: model
+  rmse: 74.24311197936441
+  run_id: 2fe1e2186455444bb151ddb11b1d3ac9
