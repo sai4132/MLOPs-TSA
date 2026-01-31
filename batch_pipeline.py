@@ -2,6 +2,9 @@ import yaml
 import mlflow
 import pandas as pd
 from prefect import flow, task
+import os
+from datetime import datetime
+
 
 # -----------------------
 # Tasks
@@ -44,7 +47,7 @@ def run_predictions(model, df):
 @task
 def save_output(df, output_csv):
     df.to_csv(output_csv, index=False)
-    return output_csv
+    return len(df)
 
 
 @task
@@ -54,10 +57,38 @@ def log_metadata(prod):
     print(f"  Git commit: {prod['git_commit']}")
     print(f"  DVC data hash: {prod['dvc_data_hash']}")
 
+@task
+def log_batch_inference(
+    prod,
+    input_csv,
+    output_csv,
+    num_rows,
+):
+    os.makedirs("logs", exist_ok=True)
+    log_path = "logs/batch_inference_log.csv"
+
+    row = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "input_csv": input_csv,
+        "output_csv": output_csv,
+        "num_rows": num_rows,
+        "run_id": prod["run_id"],
+        "git_commit": prod["git_commit"],
+        "dvc_data_hash": prod["dvc_data_hash"],
+    }
+
+    df = pd.DataFrame([row])
+
+    if os.path.exists(log_path):
+        df.to_csv(log_path, mode="a", header=False, index=False)
+    else:
+        df.to_csv(log_path, index=False)
+
+
 
 # -----------------------
 # Flow
-# -----------------------
+# ---------------------
 
 @flow(name="batch-inference-pipeline")
 def batch_inference_flow(
@@ -68,7 +99,13 @@ def batch_inference_flow(
     model = load_model(prod)
     df = load_batch_input(input_csv)
     df = run_predictions(model, df)
-    save_output(df, output_csv)
+    num_rows = save_output(df, output_csv)
+    log_batch_inference(
+        prod=prod,
+        input_csv=input_csv,
+        output_csv=output_csv,
+        num_rows=num_rows,
+    )
     log_metadata(prod)
 
 

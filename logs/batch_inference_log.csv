@@ -1,0 +1,2 @@
+timestamp,input_csv,output_csv,num_rows,run_id,git_commit,dvc_data_hash
+2026-01-31T14:21:21.124559,batch_input.csv,batch_output.csv,4,2fe1e2186455444bb151ddb11b1d3ac9,6898751fc4c5d9622d5c2c0f30513eabe7b161e6,9d9ab61bed36f7af869b9b0278eed2e6
