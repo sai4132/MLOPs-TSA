@@ -8,14 +8,15 @@ import subprocess
 import yaml
 from prefect import flow, task
 import os
+from config import AIR_PASSENGERS_CSV, AIR_PASSENGERS_DVC, REGISTRY_PATH
 
-def load_registry(path="model_registry.yaml"):
+def load_registry(path=REGISTRY_PATH):
     if not os.path.exists(path):
         return {"production": {}}
     with open(path, "r") as f:
         return yaml.safe_load(f)
 
-def save_registry(registry, path="model_registry.yaml"):
+def save_registry(registry, path=REGISTRY_PATH):
     with open(path, "w") as f:
         yaml.safe_dump(registry, f)
 
@@ -86,12 +87,12 @@ def log_experiment(model, rmse, metadata):
 # Pipeline orchestration
 # -----------------------
 
-@flow(name="tsa-training-pipeline")
-def run_pipeline():
-    df = load_data(r"D:\MLOPS\data\raw\AirPassengers.csv")
+
+def train_pipeline():
+    df = load_data(AIR_PASSENGERS_CSV)
 
     git_commit = get_git_commit()
-    data_hash = get_dvc_data_hash(r"D:\MLOPS\data\raw\AirPassengers.csv.dvc")
+    data_hash = get_dvc_data_hash(AIR_PASSENGERS_DVC)
 
     for window in [12, 24, 36]:
         with mlflow.start_run():
@@ -133,5 +134,14 @@ def run_pipeline():
 
             print(f"Window={window} | RMSE={rmse}")
 
+@flow(name="tsa-training-pipeline")
+def run_pipeline():
+    train_pipeline()
+
 if __name__ == "__main__":
-    run_pipeline()
+    if os.getenv("DISABLE_PREFECT", "0") == "1":
+        print("Running training WITHOUT Prefect orchestration")
+        train_pipeline()
+    else:
+        print("Running training WITH Prefect orchestration")
+        run_pipeline()
