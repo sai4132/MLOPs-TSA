@@ -3,6 +3,9 @@ import mlflow
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+import os
+from datetime import datetime
+
 
 # -----------------------
 # App
@@ -35,6 +38,26 @@ def load_production_model():
     model_uri = f"runs:/{prod['run_id']}/{prod['model_path']}"
     model = mlflow.pyfunc.load_model(model_uri)
     model_metadata = prod
+
+def log_inference(input_t, prediction, metadata):
+    log_path = "logs/inference_log.csv"
+    os.makedirs("logs", exist_ok=True)
+
+    row = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "input_t": input_t,
+        "prediction": prediction,
+        "run_id": metadata["run_id"],
+        "git_commit": metadata["git_commit"],
+        "dvc_data_hash": metadata["dvc_data_hash"],
+    }
+
+    df = pd.DataFrame([row])
+
+    if os.path.exists(log_path):
+        df.to_csv(log_path, mode="a", header=False, index=False)
+    else:
+        df.to_csv(log_path, index=False)
 
 
 # -----------------------
@@ -81,6 +104,11 @@ def predict(req: ForecastRequest):
     try:
         df = pd.DataFrame({"t": [req.t]})
         pred = model.predict(df)[0]
+        log_inference(
+            input_t=req.t,
+            prediction=float(pred),
+            metadata=model_metadata,
+        )
         return ForecastResponse(prediction=float(pred))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
