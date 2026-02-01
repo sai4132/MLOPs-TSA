@@ -1,89 +1,126 @@
-# Time Series MLOps Pipeline (Training → Registry → Serving)
+End-to-End MLOps Pipeline (Time Series Forecasting)
 
-This repository implements an **end-to-end MLOps system for time-series forecasting**, covering:
+This repository implements a production-style MLOps pipeline for time-series forecasting, covering training, experiment tracking, model promotion, and Dockerized serving.
 
-- data versioning
-- experiment tracking
-- automated training & evaluation
-- model promotion via a registry
-- real-time serving
-- batch inference
+The project is designed to expose real system boundaries (artifacts, registries, mounts) instead of hiding them behind abstractions.
 
-The project is intentionally built using **lightweight, transparent components** to clearly demonstrate MLOps concepts rather than hiding logic behind managed platforms.
+What This Project Does
 
----
+Trains time-series models and tracks experiments using MLflow
 
-## System Overview
+Versions data using DVC
 
-The system is split into **offline (training)** and **online (serving/inference)** components, connected via a **model registry contract**.
+Promotes the best model via an explicit file-based model registry
 
-### High-level flow
+Serves the production model using FastAPI
 
----
+Runs training and serving inside Docker containers
 
-## Core Design Principles
+Supports batch inference using the same production model
 
-- **Separation of concerns**
-  - Training decides
-  - Serving only consumes decisions
-- **Reproducibility**
-  - Code → Git
-  - Data → DVC
-  - Experiments → MLflow
-- **Explicit contracts**
-  - `model_registry.yaml` is the single source of truth
-- **Deterministic behavior**
-  - Same code + data → same model
-  - No silent promotions
+High-Level Flow
+Data (DVC)
+   ↓
+Training (Docker)
+   ↓
+MLflow Artifacts (mlruns/)
+   ↓
+model_registry.yaml (production pointer)
+   ↓
+Serving (FastAPI + Docker)
 
----
 
-## Repository Structure
+Key principle:
 
----
+Runs are history. Models are deployable assets.
+Serving always loads from the registry, not from “latest runs”.
 
-## Tools Used (and Why)
+Project Structure
+.
+├── src/
+│   ├── train.py        # Training execution (no orchestration)
+│   ├── train_flow.py   # Optional Prefect wrapper (control plane)
+│
+├── serve.py            # FastAPI app for real-time inference
+│
+├── Dockerfile.train    # Training container
+├── Dockerfile.serve    # Serving container
+│
+├── data/               # DVC-tracked data
+├── mlruns/             # MLflow artifacts (not committed)
+├── logs/               # Training & inference logs
+│
+├── model_registry.yaml # File-based production model registry
+│
+├── batch_infer.py      # Batch inference
+├── batch_pipeline.py
+│
+├── config.py
+├── pyproject.toml
+├── uv.lock
+├── README.md
 
-| Tool | Purpose |
-|-----|--------|
-| Git | Code versioning |
-| DVC | Data versioning (content-addressed) |
-| MLflow | Experiment tracking & model artifacts |
-| Prefect | Pipeline orchestration |
-| FastAPI | Real-time model serving |
-| uv | Deterministic Python environment |
+Model Registry
 
----
+model_registry.yaml is the single source of truth for serving.
 
-## Training Pipeline (`main.py`)
+Example:
 
-### What it does
+production:
+  model_uri: "/app/mlruns/0/models/m-xxxx/artifacts"
+  rmse: 39.93
+  git_commit: a91f2e1
+  dvc_data_hash: 3b2c4a
 
-- Loads versioned time-series data
-- Trains multiple models (different forecast windows)
-- Evaluates using RMSE
-- Applies a **quality gate**
-- Promotes the best model to production
-- Updates the model registry
 
-### Key properties
+Stores an explicit MLflow artifact path
 
-- Fully reproducible
-- Deterministic
-- Promotion is **conditional**, not automatic
-- Logs:
-  - Git commit hash
-  - DVC data hash
-  - Metrics
-  - Promotion status
+No run IDs
 
-### Run training
+No implicit assumptions
 
-```bash
+Serving fails fast if the registry is invalid (by design)
+
+Training
+Local
 python src/train.py
-mlflow ui
-prefect server start
 
-### Start Service
-uvicorn serve:app --reload
+Dockerized
+docker build -f Dockerfile.train -t tsa-train .
 
+docker run \
+  -v $(pwd)/mlruns:/app/mlruns \
+  -v $(pwd)/logs:/app/logs \
+  -v $(pwd)/model_registry.yaml:/app/model_registry.yaml \
+  -v $(pwd)/data:/app/data \
+  tsa-train
+
+
+Training:
+
+logs experiments to MLflow
+
+applies a quality gate
+
+promotes the best model
+
+updates model_registry.yaml
+
+Serving (Real-Time Inference)
+docker build -f Dockerfile.serve -t tsa-serve .
+
+docker run -p 8000:8000 \
+  -v $(pwd)/mlruns:/app/mlruns \
+  -v $(pwd)/model_registry.yaml:/app/model_registry.yaml \
+  tsa-serve
+
+
+API available at: http://localhost:8000/docs
+
+Loads the production model from the registry at startup
+
+Batch Inference
+python batch_infer.py
+
+
+Uses the same production model defined in model_registry.yaml.
