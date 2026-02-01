@@ -1,0 +1,29 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+ENV PYTHONPATH=/app
+
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+RUN pip install --no-cache-dir uv
+
+# Copy dependency files
+COPY pyproject.toml uv.lock ./
+
+# Copy training & pipeline code
+COPY src ./src
+COPY batch_pipeline.py config.py ./
+COPY data ./data
+COPY model_registry.yaml ./
+COPY logs ./logs
+
+# Install project + deps into system Python
+RUN uv pip install . --system --no-cache-dir
+
+# Default command: run training
+CMD ["python", "src/train.py"]

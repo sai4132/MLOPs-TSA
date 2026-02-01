@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import os
 from datetime import datetime
-from config import MODEL_REGISTRY_PATH, LOG_DIR
+from config import REGISTRY_PATH, LOG_DIR
 
 # -----------------------
 # App
@@ -21,7 +21,7 @@ model_metadata = None
 # Registry + model loading
 # -----------------------
 
-def load_registry(path=MODEL_REGISTRY_PATH):
+def load_registry(path=REGISTRY_PATH):
     with open(path, "r") as f:
         return yaml.safe_load(f)
 
@@ -32,10 +32,10 @@ def load_production_model():
     registry = load_registry()
     prod = registry.get("production")
 
-    if not prod or not prod.get("run_id"):
+    if not prod or not prod.get("model_uri"):
         raise RuntimeError("No production model found in registry")
 
-    model_uri = f"runs:/{prod['run_id']}/{prod['model_path']}"
+    model_uri = prod["model_uri"]
     model = mlflow.pyfunc.load_model(model_uri)
     model_metadata = prod
 

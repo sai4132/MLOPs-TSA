@@ -1,6 +1,5 @@
 production:
   dvc_data_hash: 9d9ab61bed36f7af869b9b0278eed2e6
-  git_commit: 6898751fc4c5d9622d5c2c0f30513eabe7b161e6
-  model_path: model
+  git_commit: unknown
+  model_uri: /app/mlruns/0/models/m-0402ee9b0bf04d33991f503f73c872eb/artifacts
   rmse: 74.24311197936441
-  run_id: 2fe1e2186455444bb151ddb11b1d3ac9
